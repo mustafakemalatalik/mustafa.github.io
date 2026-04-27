@@ -5,41 +5,46 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
 
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #f8f9fa; color: #333; height: 100vh; overflow: hidden; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8f9fa; color: #333; height: 100vh; overflow: hidden; }
         .map-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #map { width: 100%; height: 100%; }
 
-        .search-container { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; max-width: 300px; }
+        /* Mobil Uyumlu Arama Çubuğu */
+        .search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; justify-content: center; pointer-events: none; }
         #citySearch {
-            width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc;
-            background: white; color: #333; font-size: 14px; outline: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 100%; max-width: 400px; padding: 12px; border-radius: 8px; border: 1px solid #ccc;
+            background: white; color: #333; font-size: 16px; outline: none; box-shadow: 0 2px 6px rgba(0,0,0,0.2); pointer-events: auto;
         }
 
+        /* Mobil Uyumlu Buton Paneli */
         .map-overlay-panel {
-            position: absolute; top: 75px; right: 10px; background: white;
-            padding: 10px; z-index: 1000; border-radius: 8px; border: 1px solid #ccc; display: flex; flex-direction: column; gap: 5px;
+            position: absolute; top: 70px; right: 10px; background: rgba(255, 255, 255, 0.95);
+            padding: 8px; z-index: 1000; border-radius: 8px; border: 1px solid #ccc; display: flex; flex-direction: column; gap: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
+        /* Bilgi Paneli - Mobilde Altta Sabit */
         .info-box {
-            position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); 
-            padding: 15px; background: white;
+            position: absolute; bottom: 20px; left: 10px; right: 10px;
+            padding: 12px; background: white;
             border-radius: 8px; border: 1px solid #ccc; z-index: 1000; 
-            width: 85%; max-width: 400px; box-shadow: 0 2px 15px rgba(0,0,0,0.15);
+            box-shadow: 0 -2px 15px rgba(0,0,0,0.1); max-height: 120px; overflow-y: auto;
         }
 
-        .info-box h4 { margin: 0 0 8px 0; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 15px; }
+        .info-box h4 { margin: 0 0 5px 0; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 3px; font-size: 14px; }
+        #infoContent { font-size: 13px; line-height: 1.4; }
         
-        button { padding: 8px 12px; border: 1px solid #3498db; border-radius: 4px; cursor: pointer; background: white; color: #3498db; font-size: 12px; font-weight: 600; transition: 0.2s; }
+        button { padding: 10px; border: 1px solid #3498db; border-radius: 6px; cursor: pointer; background: white; color: #3498db; font-size: 13px; font-weight: 600; transition: 0.2s; touch-action: manipulation; }
         button:hover, button.active { background: #3498db; color: white; }
         .reset-btn { border-color: #e74c3c !important; color: #e74c3c !important; }
-        .reset-btn:hover { background: #e74c3c !important; color: white !important; }
 
-        footer { position: fixed; bottom: 5px; left: 50%; transform: translateX(-50%); z-index: 1001; font-size: 10px; color: #7f8c8d; pointer-events: none; }
+        footer { position: fixed; bottom: 2px; width: 100%; text-align: center; z-index: 1001; font-size: 9px; color: #7f8c8d; pointer-events: none; }
 
+        /* Masaüstü Düzenlemeleri */
         @media (min-width: 768px) {
-            .info-box { left: auto; right: 20px; transform: none; width: 250px; }
-            .search-container { left: 60px; transform: none; }
+            .info-box { left: auto; right: 10px; width: 250px; bottom: 30px; }
+            .search-container { left: 60px; right: auto; width: 250px; }
+            #citySearch { width: 250px; }
         }
     </style>
 </head>
@@ -62,7 +67,7 @@
 
     <div id="infoBox" class="info-box">
         <h4 id="panelTitle">Harita Bilgisi</h4>
-        <div id="infoContent">Veri görmek için mahallelere tıklayın veya ölçüm yapın.</div>
+        <div id="infoContent">Analiz seçin veya mahalle seçin.</div>
     </div>
 </div>
 
@@ -76,70 +81,43 @@
     var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
     var contours = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { opacity: 0.5 });
 
-    var map = L.map('map', { layers: [light], zoomControl: true }).setView([41.403, 27.355], 13);
+    var map = L.map('map', { layers: [light], zoomControl: false }).setView([41.403, 27.355], 13);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
     
     var cizilenOgeler = new L.FeatureGroup().addTo(map);
     var mahalleGrubu = new L.LayerGroup().addTo(map);
     var fayGrubu = new L.LayerGroup().addTo(map);
 
-    L.control.layers(
-        { "Sade": light, "Uydu": satellite }, 
-        { "İzohips": contours, "Fay Hatları": fayGrubu, "Mahalleler": mahalleGrubu, "Çizimler": cizilenOgeler }, 
-        { position: 'bottomleft' }
-    ).addTo(map);
-
-    /* --- FAY HATLARI --- */
-    const detayliFaylar = {
-        "type": "FeatureCollection",
-        "features": [
-            { "type": "Feature", "properties": { "name": "KAF Segmenti" }, "geometry": { "type": "LineString", "coordinates": [[26.1, 40.4], [28.5, 40.8], [29.9, 40.8]] } },
-            { "type": "Feature", "properties": { "name": "DAF Segmenti" }, "geometry": { "type": "LineString", "coordinates": [[35.8, 36.1], [37.8, 37.8], [39.0, 38.5]] } }
-        ]
-    };
-    L.geoJSON(detayliFaylar, { style: { color: "#e74c3c", weight: 2, dashArray: '5, 5' } }).addTo(fayGrubu);
+    L.control.layers({ "Sade": light, "Uydu": satellite }, { "İzohips": contours, "Faylar": fayGrubu, "Mahalleler": mahalleGrubu, "Çizim": cizilenOgeler }, { position: 'bottomleft' }).addTo(map);
 
     /* --- ÇİZİM VE ÖLÇÜM --- */
-    var drawControl = new L.Control.Draw({ 
-        edit: { featureGroup: cizilenOgeler }, 
-        draw: { polygon: true, polyline: true, rectangle: true, circle: true, marker: true } 
-    });
+    var drawControl = new L.Control.Draw({ edit: { featureGroup: cizilenOgeler }, draw: { polygon: true, polyline: true, rectangle: true, circle: true, marker: true } });
     map.addControl(drawControl);
-
-    function getMeasurement(layer, type) {
-        let text = "";
-        if (type === 'marker') {
-            let ll = layer.getLatLng();
-            text = `<b>Konum:</b> ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
-        } else if (type === 'circle') {
-            let area = (Math.PI * Math.pow(layer.getRadius(), 2) / 1000000).toFixed(3);
-            text = `<b>Daire Alanı:</b> ${area} km²`;
-        } else if (type === 'polyline') {
-            let pts = layer.getLatLngs(), d = 0;
-            for (let i=0; i<pts.length-1; i++) d += pts[i].distanceTo(pts[i+1]);
-            text = `<b>Mesafe:</b> ${(d/1000).toFixed(3)} km`;
-        } else if (type === 'polygon' || type === 'rectangle') {
-            let area = (L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]) / 1000000).toFixed(3);
-            text = `<b>Alan:</b> ${area} km²`;
-        }
-        return text;
-    }
 
     map.on(L.Draw.Event.CREATED, function (e) {
         var layer = e.layer;
         var type = e.layerType;
-        layer.drawType = type;
-        let result = getMeasurement(layer, type);
+        let result = "";
+        if (type === 'circle') result = `Alan: ${(Math.PI * Math.pow(layer.getRadius(), 2) / 1000000).toFixed(3)} km²`;
+        else if (type === 'polyline') {
+            let pts = layer.getLatLngs(), d = 0;
+            for (let i=0; i<pts.length-1; i++) d += pts[i].distanceTo(pts[i+1]);
+            result = `Mesafe: ${(d/1000).toFixed(3)} km`;
+        } else if (layer.getLatLngs) result = `Alan: ${(L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]) / 1000000).toFixed(3)} km²`;
+        else result = "İşaretlendi";
+
         layer.bindPopup(result);
         cizilenOgeler.addLayer(layer);
+        document.getElementById('infoContent').innerHTML = result;
     });
 
     /* --- ŞEHİR ARAMA --- */
-    const iller = {"Adana":[37,35.32],"Ankara":[39.93,32.85],"İstanbul":[41,28.97],"İzmir":[38.42,27.14],"Kırklareli":[41.73,27.21],"Tekirdağ":[40.98,27.51],"Edirne":[41.68,26.56]};
+    const iller = {"Ankara":[39.93,32.85],"İstanbul":[41,28.97],"İzmir":[38.42,27.14],"Kırklareli":[41.73,27.21]};
     const dl = document.getElementById('cityList');
     Object.keys(iller).sort().forEach(il => { let opt = document.createElement('option'); opt.value = il; dl.appendChild(opt); });
     function goToCity(val) { if(iller[val]) map.flyTo(iller[val], 12); }
 
-    /* --- TÜM MAHALLELER VE VERİLER --- */
+    /* --- MAHALLELER VE RENKLİ ANALİZ --- */
     const mahalleler = [
         {name:"Sevgi", lat:41.3919, lon:27.3454, nufus:2100, yas:"65+", medeni:"Bekar", egitim:"Lisans"},
         {name:"8 Kasım", lat:41.3901, lon:27.3549, nufus:10900, yas:"40-44", medeni:"Evli", egitim:"Lise"},
@@ -161,10 +139,10 @@
 
     var aktifKategori = "", katmanlar = [];
     mahalleler.forEach(m => {
-        var marker = L.circleMarker([m.lat, m.lon], { radius: 9, fillColor: "#7f8c8d", color: "#fff", weight: 1, fillOpacity: 0.8 }).addTo(mahalleGrubu);
+        var marker = L.circleMarker([m.lat, m.lon], { radius: 10, fillColor: "#bdc3c7", color: "#fff", weight: 2, fillOpacity: 0.9 }).addTo(mahalleGrubu);
         marker.veri = m; 
         marker.on("click", function() {
-            let info = `<b>${m.name} Mah.</b><br>${aktifKategori ? aktifKategori.toUpperCase() + ': ' + m[aktifKategori] : 'Analiz için kategori seçin'}`;
+            let info = `<b>${m.name} Mah.</b><br>${aktifKategori ? aktifKategori.toUpperCase() + ': ' + m[aktifKategori] : 'Analiz seçin'}`;
             marker.bindPopup(info).openPopup();
             document.getElementById('infoContent').innerHTML = info;
         });
@@ -176,8 +154,11 @@
         document.querySelectorAll('.map-overlay-panel button').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         katmanlar.forEach(k => {
-            let color = "#3498db";
-            if(tip === 'nufus') color = k.veri.nufus > 8000 ? '#1a5276' : '#a2d9ff';
+            let val = k.veri[tip], color = "#7f8c8d";
+            if(tip === 'nufus') color = val > 8000 ? '#084594' : val > 4000 ? '#4292c6' : '#c6dbef';
+            else if(tip === 'egitim') color = val === "Lisans" ? '#27ae60' : val === "Lise" ? '#f1c40f' : '#e67e22';
+            else if(tip === 'yas') color = val === "65+" ? '#c0392b' : val === "40-44" ? '#8e44ad' : '#16a085';
+            else if(tip === 'medeni') color = val === "Evli" ? '#2980b9' : '#e91e63';
             k.setStyle({ fillColor: color });
         });
     }
