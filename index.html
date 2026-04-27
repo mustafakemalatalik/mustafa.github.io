@@ -5,35 +5,38 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
 
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, sans-serif; background: #f8f9fa; color: #333; height: 100vh; overflow: hidden; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8f9fa; color: #333; height: 100vh; overflow: hidden; }
         .map-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #map { width: 100%; height: 100%; }
 
         .search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; justify-content: center; pointer-events: none; }
         #citySearch {
-            width: 100%; max-width: 450px; padding: 15px; border-radius: 12px; border: none;
-            background: white; color: #333; font-size: 16px; outline: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto;
+            width: 100%; max-width: 300px; padding: 12px; border-radius: 8px; border: 1px solid #ccc;
+            background: white; color: #333; font-size: 16px; outline: none; box-shadow: 0 2px 6px rgba(0,0,0,0.2); pointer-events: auto;
         }
 
         .map-overlay-panel {
-            position: absolute; top: 80px; right: 10px; background: rgba(255, 255, 255, 0.95);
-            padding: 10px; z-index: 1000; border-radius: 8px; border: 1px solid #ddd; display: flex; flex-direction: column; gap: 8px;
+            position: absolute; top: 70px; right: 10px; background: rgba(255, 255, 255, 0.95);
+            padding: 8px; z-index: 1000; border-radius: 8px; border: 1px solid #ccc; display: flex; flex-direction: column; gap: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
         .info-box {
-            position: absolute; bottom: 30px; left: 10px; right: 10px;
-            padding: 15px; background: white; border-radius: 12px; z-index: 1000; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2); max-height: 150px; overflow-y: auto;
+            position: absolute; bottom: 20px; left: 10px; right: 10px;
+            padding: 12px; background: white;
+            border-radius: 8px; border: 1px solid #ccc; z-index: 1000; 
+            box-shadow: 0 -2px 15px rgba(0,0,0,0.1); max-height: 120px; overflow-y: auto;
         }
 
-        button { padding: 10px; border: 1px solid #3498db; border-radius: 8px; cursor: pointer; background: white; color: #3498db; font-weight: 600; transition: 0.3s; }
+        button { padding: 10px; border: 1px solid #3498db; border-radius: 6px; cursor: pointer; background: white; color: #3498db; font-size: 13px; font-weight: 600; transition: 0.2s; }
         button:hover, button.active { background: #3498db; color: white; }
         .reset-btn { border-color: #e74c3c !important; color: #e74c3c !important; }
 
+        footer { position: fixed; bottom: 2px; width: 100%; text-align: center; z-index: 1001; font-size: 9px; color: #7f8c8d; pointer-events: none; }
+
         @media (min-width: 768px) {
-            .info-box { left: auto; right: 10px; width: 300px; bottom: 40px; }
-            .search-container { left: 80px; right: auto; width: 350px; }
+            .info-box { left: auto; right: 10px; width: 250px; bottom: 30px; }
+            .search-container { left: 60px; right: auto; width: 250px; }
         }
     </style>
 </head>
@@ -42,20 +45,23 @@
 <div class="map-wrapper">
     <div id="map"></div> 
     <div class="search-container">
-        <input type="text" id="citySearch" placeholder="Şehir, İlçe veya Mahalle yazın..." onkeypress="handleSearch(event)">
+        <input type="text" id="citySearch" list="cityList" placeholder="Şehir ara..." onchange="goToCity(this.value)">
+        <datalist id="cityList"></datalist>
     </div>
 
     <div class="map-overlay-panel">
-        <button onclick="guncelle('nufus', this)">Nüfus Analizi</button>
-        <button onclick="guncelle('egitim', this)">Eğitim Durumu</button>
-        <button onclick="resetMap()" class="reset-btn">Haritayı Sıfırla</button>
+        <button onclick="alert('Nüfus Verisi Hazırlanıyor')">Nüfus</button>
+        <button onclick="alert('Yaş Verisi Hazırlanıyor')">Yaş</button>
+        <button onclick="resetMap()" class="reset-btn">Sıfırla</button>
     </div>
 
     <div id="infoBox" class="info-box">
-        <h4 style="margin:0 0 8px 0">Analiz Paneli</h4>
-        <div id="infoContent">Arama yaparak başlayın. Mahalle detayları için haritaya yaklaşın.</div>
+        <h4 style="margin:0">Bilgi Paneli</h4>
+        <div id="infoContent">Sol alttaki kutudan deprem bölgelerini açabilirsiniz.</div>
     </div>
 </div>
+
+<footer>© 2026 ANALİZ PORTALI</footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
@@ -63,72 +69,62 @@
 <script>
     var light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
     var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-    
-    var map = L.map('map', { layers: [light], zoomControl: false }).setView([39.0, 35.2], 6);
+
+    // HARİTA MERKEZİ: TÜRKİYE
+    var map = L.map('map', { layers: [light], zoomControl: false }).setView([39.0, 35.0], 6);
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
+    
+    var cizilenOgeler = new L.FeatureGroup().addTo(map);
+    var fayGrubu = new L.LayerGroup().addTo(map);
+    var riskGrubu = new L.LayerGroup(); // Varsayılan kapalı
 
-    var fayGrubu = L.layerGroup().addTo(map);
-    var riskGrubu = L.layerGroup().addTo(map);
-    var mahalleGrubu = L.featureGroup().addTo(map);
-
+    // SOL ALTAKİ COMBOBOX (Katman Seçici)
     L.control.layers(
-        { "Sade": light, "Uydu": satellite }, 
-        { "Fay Hatları": fayGrubu, "Deprem Riski": riskGrubu, "Mahalleler": mahalleGrubu }, 
-        { position: 'bottomleft' }
+        { "Sade Harita": light, "Uydu Görüntüsü": satellite }, 
+        { 
+            "Deprem Risk Bölgeleri": riskGrubu,
+            "Aktif Fay Hatları": fayGrubu, 
+            "Çizim Araçları": cizilenOgeler 
+        }, 
+        { position: 'bottomleft', collapsed: false }
     ).addTo(map);
 
-    /* --- DÜNYA FAY HATLARI --- */
+    /* --- FAY HATLARI --- */
     fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
-        .then(res => res.json()).then(data => {
+        .then(res => res.json())
+        .then(data => {
             L.geoJSON(data, { style: { color: "#e74c3c", weight: 2 } }).addTo(fayGrubu);
         });
 
-    /* --- DEPREM RİSK BÖLGELERİ (AFAD ANALOG) --- */
-    const riskData = {
+    /* --- TÜRKİYE DEPREM RİSK BÖLGELERİ (MTA BAZLI RENKLENDİRME) --- */
+    const depremData = {
         "type": "FeatureCollection",
         "features": [
-            { "type": "Feature", "properties": {"derece": 1}, "geometry": {"type": "Polygon", "coordinates": [[[26, 40], [45, 38], [45, 39], [26, 41], [26, 40]]]}},
-            { "type": "Feature", "properties": {"derece": 1}, "geometry": {"type": "Polygon", "coordinates": [[[36, 36], [38, 38], [39, 37], [37, 36], [36, 36]]]}}
+            // 1. Derece (Kırmızı)
+            { "type": "Feature", "properties": {"seviye": "1. Derece"}, "geometry": {"type": "Polygon", "coordinates": [[[26, 40], [30, 41], [40, 40], [44, 39], [44, 38], [37, 37], [26, 37], [26, 40]]]}},
+            // 5. Derece (Yeşil - Güvenli)
+            { "type": "Feature", "properties": {"seviye": "5. Derece"}, "geometry": {"type": "Polygon", "coordinates": [[[32, 38], [35, 38], [35, 37], [32, 37], [32, 38]]]}}
         ]
     };
-    L.geoJSON(riskData, {
-        style: { color: "#c0392b", fillColor: "#e74c3c", fillOpacity: 0.3, weight: 1 }
+
+    L.geoJSON(depremData, {
+        style: function(f) {
+            return f.properties.seviye === "1. Derece" ? 
+                {color: "#800000", fillColor: "#e74c3c", fillOpacity: 0.5, weight: 1} :
+                {color: "#006400", fillColor: "#2ecc71", fillOpacity: 0.5, weight: 1};
+        }
     }).addTo(riskGrubu);
 
-    /* --- MAHALE VE KONUM ARAMA FONKSİYONU --- */
-    function handleSearch(e) {
-        if (e.key === 'Enter') {
-            let query = document.getElementById('citySearch').value;
-            // Nominatim API kullanarak Türkiye sınırları içinde arama yapar
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=tr`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.length > 0) {
-                        let loc = data[0];
-                        map.flyTo([loc.lat, loc.lon], 14);
-                        
-                        mahalleGrubu.clearLayers();
-                        L.marker([loc.lat, loc.lon]).addTo(mahalleGrubu)
-                            .bindPopup(`<b>${loc.display_name}</b>`).openPopup();
-                        
-                        document.getElementById('infoContent').innerHTML = `<b>Bulunan:</b> ${loc.display_name}`;
-                    } else {
-                        alert("Sonuç bulunamadı.");
-                    }
-                });
-        }
-    }
+    /* --- ŞEHİR LİSTESİ VE ARAMA --- */
+    const iller = {"Ankara":[39.93,32.85],"İstanbul":[41.0,28.97],"İzmir":[38.42,27.14],"Antalya":[36.88,30.70],"Erzurum":[39.9,41.27]};
+    const dl = document.getElementById('cityList');
+    Object.keys(iller).forEach(il => { let opt = document.createElement('option'); opt.value = il; dl.appendChild(opt); });
+    function goToCity(val) { if(iller[val]) map.flyTo(iller[val], 10); }
 
-    function guncelle(tip, btn) {
-        document.querySelectorAll('.map-overlay-panel button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('infoContent').innerHTML = `Şu an <b>${tip}</b> verileri simüle ediliyor.`;
-    }
-
+    /* --- RESET --- */
     function resetMap() {
-        map.flyTo([39.0, 35.2], 6);
-        mahalleGrubu.clearLayers();
-        document.getElementById('citySearch').value = "";
+        map.flyTo([39.0, 35.0], 6);
+        cizilenOgeler.clearLayers();
     }
 </script>
 </body>
