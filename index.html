@@ -1,131 +1,138 @@
 <!DOCTYPE html>
-<html lang="tr"> <head>
-    <meta charset="utf-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <title>Harita Analiz Sistemi</title> 
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Türkiye Deprem Risk Analiz Haritası</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-
+    
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8f9fa; color: #333; height: 100vh; overflow: hidden; }
-        .map-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
-        #map { width: 100%; height: 100%; }
+        body { margin: 0; padding: 0; font-family: sans-serif; background: #f0f2f5; }
+        #map { width: 100vw; height: 100vh; }
 
-        .search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; justify-content: center; pointer-events: none; }
-        #citySearch {
-            width: 100%; max-width: 300px; padding: 12px; border-radius: 8px; border: 1px solid #ccc;
-            background: white; color: #333; font-size: 16px; outline: none; box-shadow: 0 2px 6px rgba(0,0,0,0.2); pointer-events: auto;
+        /* Arama Kutusu Tasarımı */
+        .search-box {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; width: 280px;
+        }
+        #cityInput {
+            width: 100%; padding: 12px; border-radius: 25px; border: 1px solid #ccc;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); outline: none;
         }
 
-        .map-overlay-panel {
-            position: absolute; top: 70px; right: 10px; background: rgba(255, 255, 255, 0.95);
-            padding: 8px; z-index: 1000; border-radius: 8px; border: 1px solid #ccc; display: flex; flex-direction: column; gap: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        /* Sağ Üst Panel */
+        .side-panel {
+            position: absolute; top: 15px; right: 15px; z-index: 1000;
+            background: white; padding: 10px; border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 8px;
         }
-
-        .info-box {
-            position: absolute; bottom: 20px; left: 10px; right: 10px;
-            padding: 12px; background: white;
-            border-radius: 8px; border: 1px solid #ccc; z-index: 1000; 
-            box-shadow: 0 -2px 15px rgba(0,0,0,0.1); max-height: 120px; overflow-y: auto;
+        button {
+            padding: 8px 15px; cursor: pointer; border: 1px solid #3498db;
+            background: white; color: #3498db; border-radius: 5px; font-weight: bold;
         }
+        button:hover { background: #3498db; color: white; }
 
-        button { padding: 10px; border: 1px solid #3498db; border-radius: 6px; cursor: pointer; background: white; color: #3498db; font-size: 13px; font-weight: 600; transition: 0.2s; }
-        button:hover, button.active { background: #3498db; color: white; }
-        .reset-btn { border-color: #e74c3c !important; color: #e74c3c !important; }
-
-        footer { position: fixed; bottom: 2px; width: 100%; text-align: center; z-index: 1001; font-size: 9px; color: #7f8c8d; pointer-events: none; }
-
-        @media (min-width: 768px) {
-            .info-box { left: auto; right: 10px; width: 250px; bottom: 30px; }
-            .search-container { left: 60px; right: auto; width: 250px; }
+        /* Sol alttaki katman seçici (combobox) stili */
+        .leaflet-control-layers {
+            border: 2px solid #3498db !important;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2) !important;
         }
     </style>
 </head>
 <body>
 
-<div class="map-wrapper">
-    <div id="map"></div> 
-    <div class="search-container">
-        <input type="text" id="citySearch" list="cityList" placeholder="Şehir ara..." onchange="goToCity(this.value)">
-        <datalist id="cityList"></datalist>
-    </div>
-
-    <div class="map-overlay-panel">
-        <button onclick="alert('Nüfus Verisi Hazırlanıyor')">Nüfus</button>
-        <button onclick="alert('Yaş Verisi Hazırlanıyor')">Yaş</button>
-        <button onclick="resetMap()" class="reset-btn">Sıfırla</button>
-    </div>
-
-    <div id="infoBox" class="info-box">
-        <h4 style="margin:0">Bilgi Paneli</h4>
-        <div id="infoContent">Sol alttaki kutudan deprem bölgelerini açabilirsiniz.</div>
-    </div>
+<div class="search-box">
+    <input type="text" id="cityInput" list="cityList" placeholder="Şehir ara..." onchange="gotoCity(this.value)">
+    <datalist id="cityList"></datalist>
 </div>
 
-<footer>© 2026 ANALİZ PORTALI</footer>
+<div class="side-panel">
+    <button onclick="resetView()">Türkiye'ye Dön</button>
+</div>
+
+<div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
 <script>
-    var light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
+    // 1. Haritayı Oluştur (Türkiye Merkezi)
+    var map = L.map('map', { zoomControl: false }).setView([39.0, 35.2], 6);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+    // 2. Altlık Haritalar
+    var light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
     var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 
-    // HARİTA MERKEZİ: TÜRKİYE
-    var map = L.map('map', { layers: [light], zoomControl: false }).setView([39.0, 35.0], 6);
-    L.control.zoom({ position: 'bottomleft' }).addTo(map);
-    
-    var cizilenOgeler = new L.FeatureGroup().addTo(map);
-    var fayGrubu = new L.LayerGroup().addTo(map);
-    var riskGrubu = new L.LayerGroup(); // Varsayılan kapalı
+    // 3. Katman Grupları
+    var fayHatlarGrubu = L.layerGroup();
+    var depremRiskGrubu = L.layerGroup();
 
-    // SOL ALTAKİ COMBOBOX (Katman Seçici)
-    L.control.layers(
-        { "Sade Harita": light, "Uydu Görüntüsü": satellite }, 
-        { 
-            "Deprem Risk Bölgeleri": riskGrubu,
-            "Aktif Fay Hatları": fayGrubu, 
-            "Çizim Araçları": cizilenOgeler 
-        }, 
-        { position: 'bottomleft', collapsed: false }
-    ).addTo(map);
+    // 4. Sol Alttaki Combobox (Katman Kontrolü)
+    var baseMaps = {
+        "Sade Harita": light,
+        "Uydu Görüntüsü": satellite
+    };
 
-    /* --- FAY HATLARI --- */
+    var overlayMaps = {
+        "⚠️ Deprem Risk Bölgeleri": depremRiskGrubu,
+        "➖ Aktif Fay Hatları": fayHatlarGrubu
+    };
+
+    L.control.layers(baseMaps, overlayMaps, { 
+        position: 'bottomleft', 
+        collapsed: false 
+    }).addTo(map);
+
+    // 5. Fay Hatlarını Yükle (Dış Kaynak)
     fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
         .then(res => res.json())
         .then(data => {
-            L.geoJSON(data, { style: { color: "#e74c3c", weight: 2 } }).addTo(fayGrubu);
+            L.geoJSON(data, {
+                style: { color: "#ff4d4d", weight: 2, opacity: 0.8 }
+            }).addTo(fayHatlarGrubu);
         });
 
-    /* --- TÜRKİYE DEPREM RİSK BÖLGELERİ (MTA BAZLI RENKLENDİRME) --- */
-    const depremData = {
+    // 6. Deprem Risk Bölgeleri (Temsili Poligonlar - MTA/AFAD Mantığı)
+    const riskZones = {
         "type": "FeatureCollection",
         "features": [
-            // 1. Derece (Kırmızı)
-            { "type": "Feature", "properties": {"seviye": "1. Derece"}, "geometry": {"type": "Polygon", "coordinates": [[[26, 40], [30, 41], [40, 40], [44, 39], [44, 38], [37, 37], [26, 37], [26, 40]]]}},
-            // 5. Derece (Yeşil - Güvenli)
-            { "type": "Feature", "properties": {"seviye": "5. Derece"}, "geometry": {"type": "Polygon", "coordinates": [[[32, 38], [35, 38], [35, 37], [32, 37], [32, 38]]]}}
+            { "type": "Feature", "properties": {"seviye": "1. Derece Risk"}, "geometry": {"type": "Polygon", "coordinates": [[[26, 39], [30, 41], [44, 39], [44, 38], [30, 37], [26, 39]]]}},
+            { "type": "Feature", "properties": {"seviye": "Güvenli Bölge"}, "geometry": {"type": "Polygon", "coordinates": [[[32, 38.5], [35, 38.5], [35, 37.5], [32, 37.5], [32, 38.5]]]}}
         ]
     };
 
-    L.geoJSON(depremData, {
+    L.geoJSON(riskZones, {
         style: function(f) {
-            return f.properties.seviye === "1. Derece" ? 
-                {color: "#800000", fillColor: "#e74c3c", fillOpacity: 0.5, weight: 1} :
-                {color: "#006400", fillColor: "#2ecc71", fillOpacity: 0.5, weight: 1};
+            return f.properties.seviye === "1. Derece Risk" ? 
+                {color: "red", fillColor: "#f03", fillOpacity: 0.4, weight: 1} :
+                {color: "green", fillColor: "#2ecc71", fillOpacity: 0.4, weight: 1};
+        },
+        onEachFeature: function(f, l) {
+            l.bindPopup("Bölge Durumu: " + f.properties.seviye);
         }
-    }).addTo(riskGrubu);
+    }).addTo(depremRiskGrubu);
 
-    /* --- ŞEHİR LİSTESİ VE ARAMA --- */
-    const iller = {"Ankara":[39.93,32.85],"İstanbul":[41.0,28.97],"İzmir":[38.42,27.14],"Antalya":[36.88,30.70],"Erzurum":[39.9,41.27]};
-    const dl = document.getElementById('cityList');
-    Object.keys(iller).forEach(il => { let opt = document.createElement('option'); opt.value = il; dl.appendChild(opt); });
-    function goToCity(val) { if(iller[val]) map.flyTo(iller[val], 10); }
+    // 7. Şehir Arama Mantığı
+    const iller = {
+        "İstanbul": [41.0, 28.9], "Ankara": [39.9, 32.8], "İzmir": [38.4, 27.1],
+        "Antalya": [36.8, 30.7], "Hatay": [36.2, 36.1], "Gaziantep": [37.0, 37.3]
+    };
+    const dList = document.getElementById('cityList');
+    Object.keys(iller).forEach(il => {
+        let opt = document.createElement('option');
+        opt.value = il;
+        dList.appendChild(opt);
+    });
 
-    /* --- RESET --- */
-    function resetMap() {
-        map.flyTo([39.0, 35.0], 6);
-        cizilenOgeler.clearLayers();
+    function gotoCity(name) {
+        if(iller[name]) map.flyTo(iller[name], 10);
+    }
+
+    function resetView() {
+        map.flyTo([39.0, 35.2], 6);
     }
 </script>
+
 </body>
 </html>
