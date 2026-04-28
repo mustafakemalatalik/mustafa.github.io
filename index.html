@@ -7,7 +7,7 @@
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8f9fa; color: #333; height: 100vh; overflow: hidden; }
         .map-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
-        #map { width: 100%; height: 100%; background: #ddd; } /* Yüklenirken gri boşluk yerine hafif bir fon */
+        #map { width: 100%; height: 100%; background: #e5e3df; } 
 
         .search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; justify-content: center; pointer-events: none; }
         #citySearch {
@@ -40,3 +40,129 @@
         @media (min-width: 768px) {
             .info-box { left: auto; right: 10px; width: 250px; bottom: 30px; }
             .search-container { left: 60px; right: auto; width: 250px; }
+            #citySearch { width: 250px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="map-wrapper">
+    <div id="map"></div> 
+    <div class="search-container">
+        <input type="text" id="citySearch" list="cityList" placeholder="Şehir ara..." onchange="goToCity(this.value)">
+        <datalist id="cityList"></datalist>
+    </div>
+
+    <div class="map-overlay-panel">
+        <button onclick="guncelle('nufus', this)">Nüfus</button>
+        <button onclick="guncelle('yas', this)">Yaş</button>
+        <button onclick="guncelle('medeni', this)">Medeni</button>
+        <button onclick="guncelle('egitim', this)">Eğitim</button>
+        <button onclick="resetMap()" class="reset-btn">Sıfırla</button>
+    </div>
+
+    <div id="infoBox" class="info-box">
+        <h4 id="panelTitle">Harita Bilgisi</h4>
+        <div id="infoContent">Analiz seçin veya çizim yapın.</div>
+    </div>
+</div>
+
+<footer>© 2026 ANALİZ PORTALI</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+<script>
+    // Haritayı en stabil ayarlarla başlat
+    var map = L.map('map', { 
+        zoomControl: false,
+        fadeAnimation: true,
+        markerZoomAnimation: true
+    }).setView([41.403, 27.355], 13);
+
+    // Gecikmeyi gidermek için 'keepBuffer' ekledik (kenarları önceden yükler)
+    var light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        keepBuffer: 8
+    }).addTo(map);
+
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        keepBuffer: 8
+    });
+
+    var contours = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        opacity: 0.5,
+        keepBuffer: 8
+    });
+
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+    
+    var cizilenOgeler = new L.FeatureGroup().addTo(map);
+    var mahalleGrubu = new L.LayerGroup().addTo(map);
+    var fayGrubu = new L.LayerGroup().addTo(map);
+
+    L.control.layers({ "Sade": light, "Uydu": satellite }, { "İzohips": contours, "Faylar": fayGrubu, "Analiz Noktaları": mahalleGrubu, "Çizim": cizilenOgeler }, { position: 'bottomleft' }).addTo(map);
+
+    // Fay Hatları Verisi
+    fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
+        .then(res => res.json()).then(data => {
+            L.geoJSON(data, { style: { color: "#e74c3c", weight: 2, opacity: 0.8 } }).addTo(fayGrubu);
+        });
+
+    // Çizim Araçları
+    var drawControl = new L.Control.Draw({ edit: { featureGroup: cizilenOgeler }, draw: { polygon: true, polyline: true, rectangle: true, circle: true, marker: true } });
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+        var layer = e.layer;
+        cizilenOgeler.addLayer(layer);
+        document.getElementById('infoContent').innerHTML = "Yeni çizim eklendi.";
+    });
+
+    // Şehir Arama
+    const iller = {"Ankara":[39.93,32.85],"İstanbul":[41,28.97],"İzmir":[38.42,27.14],"Kırklareli":[41.73,27.21]};
+    const dl = document.getElementById('cityList');
+    Object.keys(iller).sort().forEach(il => { let opt = document.createElement('option'); opt.value = il; dl.appendChild(opt); });
+    function goToCity(val) { if(iller[val]) map.flyTo(iller[val], 12); }
+
+    // Mahalle/Nokta Verileri
+    const noktalar = [
+        {name:"Sevgi", lat:41.3919, lon:27.3454, nufus:2100, yas:"65+", medeni:"Bekar", egitim:"Lisans"},
+        {name:"8 Kasım", lat:41.3901, lon:27.3549, nufus:10900, yas:"40-44", medeni:"Evli", egitim:"Lise"},
+        {name:"Hürriyet", lat:41.4031, lon:27.3424, nufus:7300, yas:"65+", medeni:"Evli", egitim:"Lise"}
+    ];
+
+    var aktifKategori = "", katmanlar = [];
+    noktalar.forEach(m => {
+        var marker = L.circleMarker([m.lat, m.lon], { radius: 10, fillColor: "#bdc3c7", color: "#fff", weight: 2, fillOpacity: 0.9 }).addTo(mahalleGrubu);
+        marker.veri = m; 
+        marker.on("click", function() {
+            let info = `<b>${m.name} Bölgesi</b><br>${aktifKategori ? aktifKategori.toUpperCase() + ': ' + m[aktifKategori] : 'Analiz seçin'}`;
+            marker.bindPopup(info).openPopup();
+            document.getElementById('infoContent').innerHTML = info;
+        });
+        katmanlar.push(marker);
+    });
+
+    function guncelle(tip, btn) {
+        aktifKategori = tip;
+        document.querySelectorAll('.map-overlay-panel button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        katmanlar.forEach(k => {
+            let val = k.veri[tip], color = "#7f8c8d";
+            if(tip === 'nufus') color = val > 8000 ? '#084594' : '#4292c6';
+            else if(tip === 'egitim') color = val === "Lisans" ? '#27ae60' : '#f1c40f';
+            k.setStyle({ fillColor: color });
+        });
+    }
+
+    function resetMap() { 
+        map.setView([41.403, 27.355], 13); 
+        cizilenOgeler.clearLayers();
+        map.invalidateSize(); // Boyutları tazele (Gecikmeyi önler)
+    }
+
+    // İlk açılışta harita boyutunu onayla
+    window.onload = function() { map.invalidateSize(); };
+</script>
+</body>
+</html>
